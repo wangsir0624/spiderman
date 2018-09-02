@@ -15,4 +15,5 @@ $processPool->on('message', function ($message, $pool, $workerId) {
 $processPool->send('test1');
 $processPool->send('test2');
 $processPool->send('test3');
+$processPool->send(\Spiderman\ProcessPool::WORKER_STOP_MESSAGE);
 $processPool->start();

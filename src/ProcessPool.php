@@ -5,15 +5,19 @@ class ProcessPool
 {
     const MAX_MESSAGE_LENGTH = 10 << 11;
 
+    const WORKER_STOP_MESSAGE = 'OsSvrr9iY7gulovhWQ7Af15fLjaquWCFAV3N269LwWAsmBaL3Rx5DRGK5nEThkp1';
+
     protected $workers;
 
     protected $queue;
 
     protected $maxQueueNum;
 
-    protected $pipe;
-
     protected $mutexSemaphore;
+
+    protected $queueCountSemaphoreMessageQueue;
+
+    protected $workingWorkerCountSemaphoreMessageQueue;
 
     protected $onWorkerStart = null;
 
@@ -23,19 +27,19 @@ class ProcessPool
 
     private $_workerPids = [];
 
+    private $_running = false;
+
     public function __construct($workers, $maxQueueNum = 10000)
     {
         $this->workers = $workers;
 
         //initial the message queue
-        $this->initMessageQueue($maxQueueNum);
-
-        $this->pipe = stream_socket_server('unix:///var/tmp/spiderman.sock', $errno, $errstr);
-        if ($errno) {
-            throw new \RuntimeException($errstr);
-        }
-
+        $this->queue = $this->getMessageQueue();
+        $this->maxQueueNum = $maxQueueNum;
         $this->mutexSemaphore = sem_get(mt_rand(1, PHP_INT_MAX));
+        $this->queueCountSemaphoreMessageQueue = $this->getMessageQueue();
+
+        $this->workingWorkerCountSemaphoreMessageQueue = $this->getMessageQueue();
     }
 
     /**
@@ -61,15 +65,15 @@ class ProcessPool
         }
     }
 
-    public function send($message)
+    public function send($message, $lock = true)
     {
-        sem_acquire($this->mutexSemaphore);
+        $lock && sem_acquire($this->mutexSemaphore);
         $result = $this->isQueueFull() ? false : msg_send($this->queue, 1, $message, true, false);
-        var_dump($result);
-        if($result) {
-            var_dump(fwrite($this->pipe, 1));
+
+        if ($result) {
+            msg_send($this->queueCountSemaphoreMessageQueue, 1, 1, false);
         }
-        sem_release($this->mutexSemaphore);
+        $lock && sem_release($this->mutexSemaphore);
 
         return $result;
     }
@@ -81,6 +85,20 @@ class ProcessPool
         pcntl_signal(SIGCHLD, [$this, 'handleWorkerExit']);
 
         while (true) {
+            $completed = false;
+            sem_acquire($this->mutexSemaphore);
+            if ($this->isQueueEmpty() && !msg_receive($this->workingWorkerCountSemaphoreMessageQueue, 1, $msgtype, 1, $message, false, MSG_IPC_NOWAIT)) {
+                $completed = true;
+            } else {
+                msg_send($this->workingWorkerCountSemaphoreMessageQueue, 1, 1, false);
+            }
+            sem_release($this->mutexSemaphore);
+
+            if ($completed) {
+                $this->terminate();
+                return;
+            }
+
             pcntl_signal_dispatch();
             sleep(1);
         }
@@ -107,15 +125,35 @@ class ProcessPool
         }
     }
 
+    protected function terminate()
+    {
+        $this->stopAllWorkers();
+
+        msg_remove_queue($this->queue);
+        msg_remove_queue($this->queueCountSemaphoreMessageQueue);
+        msg_remove_queue($this->workingWorkerCountSemaphoreMessageQueue);
+        sem_remove($this->mutexSemaphore);
+    }
+
+    protected function stopAllWorkers()
+    {
+        foreach ($this->_workerPids as $pid) {
+            $this->send(static::WORKER_STOP_MESSAGE, false);
+        }
+
+        foreach($this->_workerPids as $pid) {
+            pcntl_wait($status);
+        }
+    }
 
     protected function handleWorkerExit()
     {
         $childPid = pcntl_wait($status);
         unset($this->_workerPids[$childPid]);
-        $this->forkWorkers();
+        //$this->forkWorkers();
     }
 
-    protected function initMessageQueue($maxQueueNum)
+    protected function getMessageQueue()
     {
         while (true) {
             $key = mt_rand(1, PHP_INT_MAX);
@@ -123,9 +161,7 @@ class ProcessPool
                 continue;
             }
 
-            $this->queue = msg_get_queue($key);
-            $this->maxQueueNum = $maxQueueNum;
-            break;
+            return msg_get_queue($key);
         }
     }
 
@@ -135,18 +171,38 @@ class ProcessPool
             call_user_func($this->onWorkerStart, $this, posix_getpid());
         }
 
-        while (true) {
-            var_dump(fread($this->pipe, 1));
+        while ($this->_running) {
+            msg_receive($this->queueCountSemaphoreMessageQueue, 1, $msgtype, 1, $message, false);
 
             sem_acquire($this->mutexSemaphore);
             $result = msg_receive($this->queue, 1, $msgtype, static::MAX_MESSAGE_LENGTH, $message, true, MSG_IPC_NOWAIT);
-            sem_acquire($this->mutexSemaphore);
+            msg_send($this->workingWorkerCountSemaphoreMessageQueue, 1, 1, false);
+            sem_release($this->mutexSemaphore);
+
             if (!$result) {
+                sem_acquire($this->mutexSemaphore);
+                msg_receive($this->workingWorkerCountSemaphoreMessageQueue, 1, $msgtype, 1, $message, false);
+                sem_release($this->mutexSemaphore);
+
                 continue;
             }
 
-            if (!is_null($this->onMessage)) {
-                call_user_func($this->onMessage, $message, $this, posix_getpid());
+            if ($message == static::WORKER_STOP_MESSAGE) {
+                sem_acquire($this->mutexSemaphore);
+                msg_receive($this->workingWorkerCountSemaphoreMessageQueue, 1, $msgtype, 1, $message, false);
+                sem_release($this->mutexSemaphore);
+
+                break;
+            }
+
+            try {
+                if (!is_null($this->onMessage)) {
+                    call_user_func($this->onMessage, $message, $this, posix_getpid());
+                }
+            } finally {
+                sem_acquire($this->mutexSemaphore);
+                msg_receive($this->workingWorkerCountSemaphoreMessageQueue, 1, $msgtype, 1, $message, false);
+                sem_release($this->mutexSemaphore);
             }
         }
 
@@ -168,10 +224,5 @@ class ProcessPool
     protected function isQueueEmpty()
     {
         return $this->getCurrentQueueLength() <= 0;
-    }
-
-    public function __destruct()
-    {
-        //@TODO: 销毁共享内存，共享内存不能写在析构函数中，而应该写在进程池关闭的时候
     }
 }
