@@ -55,13 +55,13 @@ class ProcessPool
     protected $workingWorkerCountSemaphoreMessageQueue;
 
     /**
-     * the workerstart callback
+     * the worker start callback
      * @var callable
      */
     protected $onWorkerStart = null;
 
     /**
-     * the workerstop callback
+     * the worker stop callback
      * @var callable
      */
     protected $onWorkerStop = null;
@@ -102,6 +102,7 @@ class ProcessPool
      * @param callable $callback  the event callback
      * when the event type is workerstart and worker stop, the callback signature is like function (ProcessPool $pool, $workerId)
      * when the event type is message, the callback signature is like function (message, ProcessPool $pool, $workerId)
+     * @return $this
      */
     public function on($event, $callback)
     {
@@ -117,6 +118,8 @@ class ProcessPool
                 break;
             default:
         }
+
+        return $this;
     }
 
     /**
