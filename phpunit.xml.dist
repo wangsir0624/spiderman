@@ -1,0 +1,15 @@
+<phpunit bootstrap="vendor/autoload.php">
+    <testsuites>
+        <testsuite name="spiderman">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+
+    <php>
+        <var name="REDIS_SCHEMA" value="tcp"/>
+        <var name="REDIS_HOST" value="127.0.0.1"/>
+        <var name="REDIS_PORT" value="6379"/>
+        <var name="REDIS_DATABASE" value="0"/>
+        <var name="REDIS_PASSWORD" value=""/>
+    </php>
+</phpunit>
