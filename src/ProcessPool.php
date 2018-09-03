@@ -3,32 +3,86 @@ namespace Spiderman;
 
 class ProcessPool
 {
+    /**
+     * the max message length send to the pool
+     * default is 2M
+     * @const int
+     */
     const MAX_MESSAGE_LENGTH = 10 << 11;
 
+    /**
+     * when the worker receive this message, it will exit running
+     * @const string
+     */
     const WORKER_STOP_MESSAGE = 'OsSvrr9iY7gulovhWQ7Af15fLjaquWCFAV3N269LwWAsmBaL3Rx5DRGK5nEThkp1';
 
+    /**
+     * the worker numbers
+     * @var int
+     */
     protected $workers;
 
+    /**
+     * the message queue
+     * @var resource
+     */
     protected $queue;
 
+    /**
+     * the capacity of the message queue
+     * @var int
+     */
     protected $maxQueueNum;
 
+    /**
+     * the mutex semaphore
+     * @var resource
+     */
     protected $mutexSemaphore;
 
+    /**
+     * because the sem_release() function can only release the semaphore acquired by the calling process, so we use the blocking message queue instead
+     * the queue item count semaphore
+     * @var resource
+     */
     protected $queueCountSemaphoreMessageQueue;
 
+    /**
+     * because the sem_release() function can only release the semaphore acquired by the calling process, so we use the blocking message queue instead
+     * the working workers count semaphore
+     * @var resource
+     */
     protected $workingWorkerCountSemaphoreMessageQueue;
 
+    /**
+     * the workerstart callback
+     * @var callable
+     */
     protected $onWorkerStart = null;
 
+    /**
+     * the workerstop callback
+     * @var callable
+     */
     protected $onWorkerStop = null;
 
+    /**
+     * the message callback
+     * @var callable
+     */
     protected $onMessage = null;
 
+    /**
+     * the workers pid set
+     * @var array
+     */
     private $_workerPids = [];
 
-    private $_running = false;
-
+    /**
+     * ProcessPool constructor.
+     * @param int $workers  the worker numbers
+     * @param int $maxQueueNum  the max length of the message queue
+     */
     public function __construct($workers, $maxQueueNum = 10000)
     {
         $this->workers = $workers;
@@ -65,6 +119,12 @@ class ProcessPool
         }
     }
 
+    /**
+     * send message to the pool
+     * @param mixed $message  when the message is a complicated type, it will be serialized automatically
+     * @param bool $lock  when acquire the mutex lock while sending
+     * @return bool
+     */
     public function send($message, $lock = true)
     {
         $lock && sem_acquire($this->mutexSemaphore);
@@ -78,6 +138,9 @@ class ProcessPool
         return $result;
     }
 
+    /**
+     * start the pool, it will not return until the pool complete the jobs
+     */
     public function start()
     {
         $this->forkWorkers();
@@ -87,10 +150,12 @@ class ProcessPool
         while (true) {
             $completed = false;
             sem_acquire($this->mutexSemaphore);
-            if ($this->isQueueEmpty() && !msg_receive($this->workingWorkerCountSemaphoreMessageQueue, 1, $msgtype, 1, $message, false, MSG_IPC_NOWAIT)) {
+            if (!($hasWorkingWorker = msg_receive($this->workingWorkerCountSemaphoreMessageQueue, 1, $msgtype, 1, $message, false, MSG_IPC_NOWAIT)) && $this->isQueueEmpty()) {
                 $completed = true;
             } else {
-                msg_send($this->workingWorkerCountSemaphoreMessageQueue, 1, 1, false);
+                if ($hasWorkingWorker) {
+                    msg_send($this->workingWorkerCountSemaphoreMessageQueue, 1, 1, false);
+                }
             }
             sem_release($this->mutexSemaphore);
 
@@ -104,6 +169,9 @@ class ProcessPool
         }
     }
 
+    /**
+     * fork worker processes
+     */
     protected function forkWorkers()
     {
         while (count($this->_workerPids) < $this->workers) {
@@ -111,6 +179,10 @@ class ProcessPool
         }
     }
 
+    /**
+     * fork one worker process
+     * @return bool|int  return the child process id on success, and false on failure
+     */
     protected function forkOneWorker()
     {
         $pid = pcntl_fork();
@@ -125,6 +197,9 @@ class ProcessPool
         }
     }
 
+    /**
+     * stop all the workers and release the resources
+     */
     protected function terminate()
     {
         $this->stopAllWorkers();
@@ -135,17 +210,23 @@ class ProcessPool
         sem_remove($this->mutexSemaphore);
     }
 
+    /**
+     * stop all the workers
+     */
     protected function stopAllWorkers()
     {
         foreach ($this->_workerPids as $pid) {
             $this->send(static::WORKER_STOP_MESSAGE, false);
         }
 
-        foreach($this->_workerPids as $pid) {
+        foreach ($this->_workerPids as $pid) {
             pcntl_wait($status);
         }
     }
 
+    /**
+     * the SIGCHILD handler
+     */
     protected function handleWorkerExit()
     {
         $childPid = pcntl_wait($status);
@@ -153,6 +234,10 @@ class ProcessPool
         //$this->forkWorkers();
     }
 
+    /**
+     * get a message queue
+     * @return resource
+     */
     protected function getMessageQueue()
     {
         while (true) {
@@ -165,13 +250,16 @@ class ProcessPool
         }
     }
 
+    /**
+     * work loop
+     */
     protected function doWork()
     {
         if (!is_null($this->onWorkerStart)) {
             call_user_func($this->onWorkerStart, $this, posix_getpid());
         }
 
-        while ($this->_running) {
+        while (true) {
             msg_receive($this->queueCountSemaphoreMessageQueue, 1, $msgtype, 1, $message, false);
 
             sem_acquire($this->mutexSemaphore);
@@ -211,16 +299,28 @@ class ProcessPool
         }
     }
 
+    /**
+     * get the current message queue length
+     * @return int
+     */
     protected function getCurrentQueueLength()
     {
         return msg_stat_queue($this->queue)['msg_qnum'];
     }
 
+    /**
+     * return whether the message queue is full
+     * @return bool
+     */
     protected function isQueueFull()
     {
         return $this->getCurrentQueueLength() >= $this->maxQueueNum;
     }
 
+    /**
+     * return whether the message queue is empty
+     * @return bool
+     */
     protected function isQueueEmpty()
     {
         return $this->getCurrentQueueLength() <= 0;

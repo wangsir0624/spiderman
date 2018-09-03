@@ -12,8 +12,9 @@ $processPool->on('workerstop', function ($pool, $workerId) {
 $processPool->on('message', function ($message, $pool, $workerId) {
     echo 'Receive message: ' . $message . PHP_EOL;
 });
-$processPool->send('test1');
-$processPool->send('test2');
-$processPool->send('test3');
+
+for ($i = 1; $i <= 1000; $i++) {
+    $processPool->send('test' . $i);
+}
 $processPool->send(\Spiderman\ProcessPool::WORKER_STOP_MESSAGE);
 $processPool->start();

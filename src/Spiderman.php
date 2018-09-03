@@ -32,7 +32,6 @@ class Spiderman
      */
     public function on($event, $callback)
     {
-
     }
 
     /**
@@ -43,7 +42,6 @@ class Spiderman
      */
     public function tick($times, $callback)
     {
-
     }
 
     /**
@@ -71,12 +69,10 @@ class Spiderman
 
     protected function doWorkerStart(ProcessPool $pool, $workerId)
     {
-
     }
 
     protected function doWorkerStop(ProcessPool $pool, $workerId)
     {
-
     }
 
     protected function doMessage($message, ProcessPool $pool, $workerId)
