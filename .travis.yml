@@ -1,6 +1,5 @@
 language: php
 php:
-  - 5.6
   - 7
   - nightly
 
@@ -8,4 +7,4 @@ services:
   - redis-server
 
 before_script:
-- composer install --ignore-platform-reqs
+- composer install

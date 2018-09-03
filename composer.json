@@ -14,6 +14,6 @@
     "predis/predis": "^1.1"
   },
   "require-dev": {
-    "phpunit/phpunit": "^7.3"
+    "phpunit/phpunit": "^6.0"
   }
 }
