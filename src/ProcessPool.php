@@ -122,18 +122,17 @@ class ProcessPool
     /**
      * send message to the pool
      * @param mixed $message  when the message is a complicated type, it will be serialized automatically
-     * @param bool $lock  when acquire the mutex lock while sending
      * @return bool
      */
-    public function send($message, $lock = true)
+    public function send($message)
     {
-        $lock && sem_acquire($this->mutexSemaphore);
+        sem_acquire($this->mutexSemaphore);
         $result = $this->isQueueFull() ? false : msg_send($this->queue, 1, $message, true, false);
 
         if ($result) {
             msg_send($this->queueCountSemaphoreMessageQueue, 1, 1, false);
         }
-        $lock && sem_release($this->mutexSemaphore);
+        sem_release($this->mutexSemaphore);
 
         return $result;
     }
@@ -216,7 +215,7 @@ class ProcessPool
     protected function stopAllWorkers()
     {
         foreach ($this->_workerPids as $pid) {
-            $this->send(static::WORKER_STOP_MESSAGE, false);
+            $this->send(static::WORKER_STOP_MESSAGE);
         }
 
         foreach ($this->_workerPids as $pid) {
