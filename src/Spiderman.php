@@ -94,7 +94,7 @@ class Spiderman
     public function __construct($settings = [])
     {
         $this->settings = array_merge(static::getDefaultSettings(), $settings);
-
+        $this->guzzleOptions = static::getDefaultGuzzleOptions();
         $this->initSet();
     }
 
@@ -213,11 +213,22 @@ class Spiderman
     }
 
     /**
+     * get the default guzzle options
+     * @return array
+     */
+    protected static function getDefaultGuzzleOptions()
+    {
+        return [
+            'http_errors' => false,
+        ];
+    }
+
+    /**
      * the process pool worker start callback
      * @param ProcessPool $pool
      * @param $workerId
      */
-    protected function doWorkerStart(ProcessPool $pool, $workerId)
+    public function doWorkerStart(ProcessPool $pool, $workerId)
     {
         $this->initGuzzleClient();
 
@@ -231,7 +242,7 @@ class Spiderman
      * @param ProcessPool $pool
      * @param $workerId
      */
-    protected function doWorkerStop(ProcessPool $pool, $workerId)
+    public function doWorkerStop(ProcessPool $pool, $workerId)
     {
         if (!is_null($this->onWorkerStop)) {
             call_user_func($this->onWorkerStop, $this, $workerId);
@@ -244,7 +255,7 @@ class Spiderman
      * @param ProcessPool $pool
      * @param $workerId
      */
-    protected function doMessage($message, ProcessPool $pool, $workerId)
+    public function doMessage($message, ProcessPool $pool, $workerId)
     {
         list($link, $this->_currentLinkLevel) = json_decode($message);
 
