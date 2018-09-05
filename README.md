@@ -2,7 +2,7 @@
 
 [![Build Status](https://www.travis-ci.org/wangsir0624/spiderman.svg?branch=master)](https://www.travis-ci.org/wangsir0624/spiderman)
 
-Spiderman is a high performance crawler framework, which you can use to develop you own crawler application in only a few minutes.
+Spiderman is a high performance crawler framework, which you can use to develop your own crawler application in only a few minutes.
 
 ## Requirements
 

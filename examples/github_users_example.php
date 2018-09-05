@@ -3,7 +3,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 if ($argc < 2) {
     echo 'Please input the start user: ';
-    $argv[1] = fgets(STDIN);
+    $argv[1] = trim(fgets(STDIN));
 }
 
 $spiderman = new \Spiderman\Spiderman([

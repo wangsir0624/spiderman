@@ -1,4 +1,15 @@
 {
+  "name": "wangjian/spiderman",
+  "description": "the high performance crawler framework",
+  "keywords": ["crawler"],
+  "license": "MIT",
+  "type": "library",
+  "authors": [
+    {
+      "name": "Wangjian",
+      "email": "1636801376@qq.com"
+    }
+  ],
   "autoload": {
     "psr-4": {
       "Spiderman\\": "src"
@@ -10,6 +21,7 @@
     }
   },
   "require": {
+    "php": "~7.0",
     "guzzlehttp/guzzle": "^6.3",
     "predis/predis": "^1.1",
     "imangazaliev/didom": "^1.13"
