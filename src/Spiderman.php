@@ -119,8 +119,9 @@ class Spiderman
      * add event callback
      * @param string $event  event type, the available values are workerstart, workerstop, beforedownload, afterdownload
      * @param callable $callback
-     * when the event type is workerstart, workerstop or beforedownload, the callback function signature is like function (Spiderman $spiderman, $workerId)
-     * when the event type is afterdownload, the callback function signature is like function (Response $response, Spiderman $spiderman, $workerId)
+     * when the event type is workerstart or workerstop, the callback function signature is like function (Spiderman $spiderman, $workerId)
+     * when the event type is beforedownload, the callback function signature is like function ($link, Spiderman $spiderman, $workerId)
+     * when the event type is afterdownload, the callback function signature is like function ($link, Response $response, Spiderman $spiderman, $workerId)
      * @return $this;
      */
     public function on($event, $callback)
@@ -270,13 +271,13 @@ class Spiderman
         }
 
         if (!is_null($this->onBeforeDownload)) {
-            call_user_func($this->onBeforeDownload, $this, $workerId);
+            call_user_func($this->onBeforeDownload, $link, $this, $workerId);
         }
 
         $response = $this->guzzleClient->get($link, $this->guzzleOptions);
 
         if (!is_null($this->onAfterDownload)) {
-            call_user_func($this->onAfterDownload, $response, $this, $workerId);
+            call_user_func($this->onAfterDownload, $link, $response, $this, $workerId);
         }
 
         $this->_alreadyProcessedCount++;

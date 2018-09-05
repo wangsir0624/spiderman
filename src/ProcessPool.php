@@ -233,7 +233,7 @@ class ProcessPool
     {
         $childPid = pcntl_wait($status);
         unset($this->_workerPids[$childPid]);
-        //$this->forkWorkers();
+        $this->forkWorkers();
     }
 
     /**
